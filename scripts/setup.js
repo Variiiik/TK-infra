@@ -254,7 +254,7 @@ async function main() {
 
   console.log('\n🗄  Running database migrations...');
   try {
-    run('pnpm --filter @take-control/database db:migrate:dev -- --name init');
+    run('pnpm --filter=@take-control/database exec prisma migrate dev --name init');
     run('pnpm --filter @take-control/database db:seed');
   } catch (err) {
     console.log('⚠️  Database migration failed:', err.message);
