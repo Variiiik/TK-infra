@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Dist files
+apps/desktop/dist-release/
+apps/desktop/dist/
+apps/desktop/win-unpacked/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Cache
+.turbo/
+.eslintcache
+.prettiercache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Electron
+release/
+electron-builder/
+
+# Database
+*.db
+*.sqlite
+
+# Prisma
+packages/database/node_modules/
+
+# Docker
+.docker/
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.cert
+ssl/
+
+apps/desktop/dist-release/

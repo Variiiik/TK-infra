@@ -1,0 +1,476 @@
+// ============================================================
+// TAKE CONTROL - Prisma Database Schema
+// PostgreSQL with full enterprise feature set
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────
+
+enum UserRole {
+  super_admin
+  org_admin
+  technician
+  user
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+  pending_verification
+}
+
+enum OrgPlan {
+  free
+  starter
+  professional
+  enterprise
+}
+
+enum OrgStatus {
+  active
+  suspended
+  trial
+}
+
+enum DeviceOS {
+  windows
+  macos
+  linux
+  android
+  ios
+  unknown
+}
+
+enum DeviceStatus {
+  online
+  offline
+  busy
+  idle
+  connecting
+}
+
+enum AgentStatus {
+  running
+  stopped
+  updating
+  error
+}
+
+enum SessionStatus {
+  pending
+  waiting_approval
+  approved
+  active
+  paused
+  ended
+  rejected
+  expired
+}
+
+enum SessionEndReason {
+  technician_ended
+  user_ended
+  timeout
+  connection_lost
+  error
+  rejected
+}
+
+enum ControlMode {
+  view_only
+  full_control
+  none
+}
+
+enum RequestPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum AuditAction {
+  user_login
+  user_logout
+  user_created
+  user_updated
+  user_deleted
+  session_started
+  session_ended
+  session_control_granted
+  session_control_revoked
+  device_registered
+  device_deleted
+  file_uploaded
+  file_downloaded
+  settings_changed
+  api_key_created
+  api_key_revoked
+}
+
+enum NotificationType {
+  session_request
+  session_started
+  session_ended
+  device_offline
+  device_online
+  update_available
+  system
+}
+
+enum FileTransferStatus {
+  pending
+  in_progress
+  completed
+  failed
+  cancelled
+}
+
+// ─── Organization ─────────────────────────────────────────────────
+
+model Organization {
+  id                    String    @id @default(cuid())
+  name                  String
+  slug                  String    @unique
+  logoUrl               String?
+  plan                  OrgPlan   @default(free)
+  status                OrgStatus @default(trial)
+  maxTechnicians        Int       @default(5)
+  maxConcurrentSessions Int       @default(10)
+
+  // Settings as JSON
+  requireSessionApproval  Boolean @default(true)
+  allowFileTransfer        Boolean @default(true)
+  allowChat                Boolean @default(true)
+  allowRecording           Boolean @default(false)
+  sessionTimeoutMinutes    Int     @default(60)
+  allowUnattendedAccess    Boolean @default(false)
+  enforceTwoFactor         Boolean @default(false)
+  whitelistedIPs           String[] @default([])
+  customBrandingJson        String?  // JSON blob for branding config
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  devices      Device[]
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  apiKeys      ApiKey[]
+  invitations  UserInvitation[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+// ─── User ─────────────────────────────────────────────────────────
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  displayName    String
+  avatarUrl      String?
+  role           UserRole   @default(user)
+  status         UserStatus @default(pending_verification)
+  emailVerified  Boolean    @default(false)
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  lastLoginAt   DateTime?
+  lastLoginIP   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  devices              Device[]
+  technicianSessions   Session[]     @relation("TechnicianSessions")
+  userSessions         Session[]     @relation("UserSessions")
+  supportRequests      SupportRequest[]
+  technicianRequests   SupportRequest[] @relation("TechnicianRequests")
+  auditActorLogs       AuditLog[]    @relation("AuditActor")
+  notifications        Notification[]
+  chatMessages         ChatMessage[]
+  refreshTokens        RefreshToken[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+// ─── Refresh Tokens ───────────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  @@index([token])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── User Invitation ──────────────────────────────────────────────
+
+model UserInvitation {
+  id             String   @id @default(cuid())
+  email          String
+  role           UserRole
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invitedById    String
+  token          String   @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([token])
+  @@map("user_invitations")
+}
+
+// ─── Device (Agent) ───────────────────────────────────────────────
+
+model Device {
+  id             String       @id @default(cuid())
+  name           String
+  hostname       String
+  os             DeviceOS
+  osVersion      String
+  agentVersion   String
+  agentStatus    AgentStatus  @default(stopped)
+  status         DeviceStatus @default(offline)
+  ipAddress      String?
+  macAddress     String?
+  registrationToken String?   @unique
+
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Hardware info
+  cpuInfo        String?
+  ramInfo        String?
+  monitorsJson   String?      // JSON: MonitorInfo[]
+  timezone       String?
+  locale         String?
+
+  lastSeenAt     DateTime?
+  registeredAt   DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  sessions        Session[]
+  supportRequests SupportRequest[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("devices")
+}
+
+// ─── Support Request ──────────────────────────────────────────────
+
+model SupportRequest {
+  id             String          @id @default(cuid())
+  deviceId       String
+  device         Device          @relation(fields: [deviceId], references: [id])
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  organizationId String
+  status         SessionStatus   @default(pending)
+  priority       RequestPriority @default(normal)
+  description    String?
+  technicianId   String?
+  technician     User?           @relation("TechnicianRequests", fields: [technicianId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session Session?
+
+  @@index([organizationId, status])
+  @@index([technicianId])
+  @@map("support_requests")
+}
+
+// ─── Session ──────────────────────────────────────────────────────
+
+model Session {
+  id             String           @id @default(cuid())
+  requestId      String           @unique
+  request        SupportRequest   @relation(fields: [requestId], references: [id])
+  deviceId       String
+  device         Device           @relation(fields: [deviceId], references: [id])
+  technicianId   String
+  technician     User             @relation("TechnicianSessions", fields: [technicianId], references: [id])
+  userId         String
+  user           User             @relation("UserSessions", fields: [userId], references: [id])
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+
+  status         SessionStatus    @default(pending)
+  controlMode    ControlMode      @default(none)
+  activeMonitorId Int             @default(0)
+
+  startedAt      DateTime?
+  endedAt        DateTime?
+  endReason      SessionEndReason?
+  durationSeconds Int?
+
+  technicianIp   String?
+  userIp         String?
+  resolution     String?
+  encryptionMethod String        @default("AES-256-GCM")
+
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chatMessages  ChatMessage[]
+  fileTransfers FileTransfer[]
+  recordings    SessionRecording[]
+
+  @@index([organizationId, status])
+  @@index([technicianId])
+  @@index([userId])
+  @@index([deviceId])
+  @@map("sessions")
+}
+
+// ─── Chat Message ─────────────────────────────────────────────────
+
+model ChatMessage {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  senderId  String
+  sender    User    @relation(fields: [senderId], references: [id])
+  content   String
+  type      String  @default("text")
+  fileUrl   String?
+  fileName  String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+// ─── File Transfer ────────────────────────────────────────────────
+
+model FileTransfer {
+  id          String             @id @default(cuid())
+  sessionId   String
+  session     Session            @relation(fields: [sessionId], references: [id])
+  fileName    String
+  fileSize    BigInt
+  mimeType    String
+  direction   String             // "to_device" | "from_device"
+  status      FileTransferStatus @default(pending)
+  progress    Int                @default(0)
+  fileUrl     String?
+  checksum    String?
+  errorMessage String?
+  initiatedBy String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([sessionId])
+  @@map("file_transfers")
+}
+
+// ─── Session Recording ────────────────────────────────────────────
+
+model SessionRecording {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  fileUrl     String
+  fileSize    BigInt
+  duration    Int
+  format      String   @default("webm")
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("session_recordings")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  action         AuditAction
+  actorId        String
+  actor          User        @relation("AuditActor", fields: [actorId], references: [id])
+  targetId       String?
+  targetType     String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  ipAddress      String?
+  userAgent      String?
+  metadataJson   String?
+  createdAt      DateTime    @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// ─── Notification ─────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  read      Boolean          @default(false)
+  dataJson  String?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+// ─── API Key ──────────────────────────────────────────────────────
+
+model ApiKey {
+  id             String   @id @default(cuid())
+  name           String
+  keyHash        String   @unique
+  keyPrefix      String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  permissions    String[] @default([])
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
