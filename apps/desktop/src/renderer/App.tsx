@@ -151,7 +151,10 @@ export default function App() {
     });
 
     const unIce = bridge.onRtcIceCandidate((data: any) => {
-      pc?.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+      const c = data.candidate;
+      // Skip end-of-candidates signals (sdpMid and sdpMLineIndex both null)
+      if (!c || (c.sdpMid == null && c.sdpMLineIndex == null)) return;
+      pc?.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
     });
 
     const unEnd = bridge.onSessionEnded(() => cleanup());
