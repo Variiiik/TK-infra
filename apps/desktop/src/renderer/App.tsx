@@ -125,9 +125,10 @@ export default function App() {
       stream.getTracks().forEach(t => pc?.addTrack(t, stream));
     };
 
-    // Session approved — just pre-init the pc so ICE can start warming up
+    // Session approved — pre-init pc so ICE warms up before the offer arrives.
+    // Guard: if onRtcOffer already created pc (offer beat SESSION_APPROVED), don't destroy it.
     const unRtcStart = bridge.onRtcSessionStart((data: any) => {
-      initPeerConnection(data);
+      if (!pc) initPeerConnection(data);
     });
 
     // Technician sends offer → add screen track FIRST, then create answer
