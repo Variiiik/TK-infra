@@ -18,7 +18,8 @@ export class InputService {
   moveMouse(relX: number, relY: number): void {
     const { x, y } = this.absCoords(relX, relY);
     if (PLATFORM === 'win32') {
-      this.ps(`[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x},${y})`);
+      // Load assembly (no compilation) then set cursor position
+      this.ps(`Add-Type -AssemblyName System.Windows.Forms;[System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(${x},${y})`);
     } else if (PLATFORM === 'darwin') {
       exec(`cliclick m:${x},${y}`, () => {});
     } else {

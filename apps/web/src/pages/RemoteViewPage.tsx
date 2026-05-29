@@ -204,8 +204,12 @@ export function RemoteViewPage() {
   }, [sessionId, session]);
 
   // Mouse/keyboard input forwarding
+  const lastMoveRef = useRef(0);
   const sendMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (controlMode !== 'full_control') return;
+    const now = Date.now();
+    if (now - lastMoveRef.current < 50) return; // throttle to ~20fps
+    lastMoveRef.current = now;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x = (e.clientX - rect.left) / rect.width;

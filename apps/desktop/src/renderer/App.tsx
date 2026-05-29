@@ -169,7 +169,8 @@ export default function App() {
     });
 
     const unMonitor = bridge.onRtcMonitorSwitch(async ({ monitorId }) => {
-      if (!pc) return;
+      const currentPc = pc; // capture before any await — pc may be set to null during async ops
+      if (!currentPc) return;
       const sources = await bridge.getScreenSources();
       const source = sources[monitorId] ?? sources[0];
       if (!source) return;
@@ -179,7 +180,7 @@ export default function App() {
           video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source.id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 } },
         });
         const newTrack = stream.getVideoTracks()[0];
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        const sender = currentPc.getSenders().find(s => s.track?.kind === 'video');
         if (sender && newTrack) await sender.replaceTrack(newTrack);
       } catch (err) { console.error('[RTC] monitor switch failed:', err); }
     });
