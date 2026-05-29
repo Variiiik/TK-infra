@@ -50,7 +50,7 @@ router.patch('/settings', requirePermission('settings:manage'), asyncHandler(asy
 
   await prisma.auditLog.create({
     data: {
-      action: 'org_settings_updated',
+      action: 'settings_changed',
       actorId: req.user!.sub,
       targetId: org.id,
       targetType: 'Organization',
