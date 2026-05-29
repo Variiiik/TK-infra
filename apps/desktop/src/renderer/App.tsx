@@ -27,6 +27,7 @@ declare global {
       onRtcOffer:          (cb: (d: any) => void)            => () => void;
       onRtcAnswer:         (cb: (d: any) => void)            => () => void;
       onRtcIceCandidate:   (cb: (d: any) => void)            => () => void;
+      onRtcMonitorSwitch:  (cb: (d: { monitorId: number }) => void) => () => void;
       onUpdateDownloaded:  (cb: (d: any) => void)            => () => void;
     };
     tcAgentError?: string;
@@ -137,17 +138,20 @@ export default function App() {
       console.log('[RTC] offer received, pc exists:', !!pc, 'sessionId:', data.sessionId);
       if (!pc) initPeerConnection(data);
       try {
-        await pc!.setRemoteDescription(new RTCSessionDescription(data.signal));
-        console.log('[RTC] remote description set, capturing screen...');
+        // Capture screen BEFORE setRemoteDescription: creates a sendrecv transceiver
+        // that Chrome can match with the offer's recvonly m-line → answer = sendonly.
         if (pc!.getSenders().length === 0) await captureScreen();
         console.log('[RTC] senders after capture:', pc!.getSenders().length);
+
+        const offerVideoDir = data.signal?.sdp?.match(/m=video[^\n]*\n(?:[^\n]*\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
+        console.log('[RTC] offer video direction:', offerVideoDir?.[1] ?? 'NOT FOUND');
+
+        await pc!.setRemoteDescription(new RTCSessionDescription(data.signal));
+
         const answer = await pc!.createAnswer();
         await pc!.setLocalDescription(answer);
-        // Log video direction from SDP to confirm track is included
-        const videoLine = answer.sdp?.match(/m=video.*\r?\n(.*\r?\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
-        console.log('[RTC] answer video direction:', videoLine?.[2] ?? 'NOT FOUND in SDP');
-        console.log('[RTC] answer created, sending...');
-        // Serialize to plain object — RTCSessionDescription getters are lost in IPC structured clone
+        const videoLine = answer.sdp?.match(/m=video[^\n]*\n(?:[^\n]*\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
+        console.log('[RTC] answer video direction:', videoLine?.[1] ?? 'NOT FOUND');
         bridge.sendRtcAnswer({
           sessionId: data.sessionId,
           toPeerId:  data.fromPeerId,
@@ -164,6 +168,22 @@ export default function App() {
       pc?.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error('[RTC] addIceCandidate failed:', e));
     });
 
+    const unMonitor = bridge.onRtcMonitorSwitch(async ({ monitorId }) => {
+      if (!pc) return;
+      const sources = await bridge.getScreenSources();
+      const source = sources[monitorId] ?? sources[0];
+      if (!source) return;
+      try {
+        const stream: MediaStream = await (navigator.mediaDevices as any).getUserMedia({
+          audio: false,
+          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source.id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 } },
+        });
+        const newTrack = stream.getVideoTracks()[0];
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender && newTrack) await sender.replaceTrack(newTrack);
+      } catch (err) { console.error('[RTC] monitor switch failed:', err); }
+    });
+
     const unEnd = bridge.onSessionEnded(() => cleanup());
 
     return () => {
@@ -171,6 +191,7 @@ export default function App() {
       unRtcStart?.();
       unOffer?.();
       unIce?.();
+      unMonitor?.();
       unEnd?.();
     };
   }, []);

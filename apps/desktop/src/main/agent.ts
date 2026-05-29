@@ -244,6 +244,10 @@ export class TakeControlAgent {
       this.inputService.keyPress(data.key, data.modifiers);
     });
 
+    socket.on(WS_EVENTS.SESSION_MONITOR_SWITCH, (data: any) => {
+      this.config.sendToRenderer?.('rtc:switch-monitor', { monitorId: data.monitorId });
+    });
+
     socket.on(WS_EVENTS.AGENT_RESTART, () => this.restart());
   }
 

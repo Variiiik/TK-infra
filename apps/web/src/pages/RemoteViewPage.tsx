@@ -54,6 +54,12 @@ export function RemoteViewPage() {
     setChatMessages(session.chatMessages ?? []);
     setSessionStatus(session.status);
 
+    // Initialize monitors from device data
+    try {
+      const mons = session.device?.monitorsJson ? JSON.parse(session.device.monitorsJson) : [];
+      if (Array.isArray(mons) && mons.length > 0) setMonitors(mons);
+    } catch { /* malformed JSON — leave monitors empty */ }
+
     // WebRTC setup
     const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
     const pc = new RTCPeerConnection({ iceServers });
@@ -225,7 +231,7 @@ export function RemoteViewPage() {
   };
 
   const handleControlToggle = async () => {
-    if (session?.status !== 'active') {
+    if (sessionStatus !== 'active') {
       toast.error('Session must be active to change control mode');
       return;
     }

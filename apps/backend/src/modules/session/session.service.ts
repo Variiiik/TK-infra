@@ -222,6 +222,13 @@ export class SessionService {
       },
     });
 
+    // Notify agent and technician via WebSocket (REST callers bypass the socket gateway)
+    const payload = { sessionId, reason };
+    emitToUser(session.userId, WS_EVENTS.SESSION_ENDED, payload);
+    if (session.technicianId !== session.userId) {
+      emitToUser(session.technicianId, WS_EVENTS.SESSION_ENDED, payload);
+    }
+
     logger.info('Session ended', { sessionId, durationSeconds });
   }
 
@@ -247,15 +254,28 @@ export class SessionService {
       },
     });
 
+    // Notify agent and all session participants via WebSocket
+    const payload = { sessionId, mode };
+    emitToUser(session.userId, WS_EVENTS.SESSION_CONTROL_TRANSFER, payload);
+    if (session.technicianId !== session.userId) {
+      emitToUser(session.technicianId, WS_EVENTS.SESSION_CONTROL_TRANSFER, payload);
+    }
+
     logger.info('Control transferred', { sessionId, mode });
     return { sessionId, controlMode: mode };
   }
 
   async switchMonitor(sessionId: string, monitorId: number) {
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) return;
+
     await prisma.session.update({
       where: { id: sessionId },
       data: { activeMonitorId: monitorId },
     });
+
+    // Tell the agent to switch the captured screen
+    emitToUser(session.userId, WS_EVENTS.SESSION_MONITOR_SWITCH, { sessionId, monitorId });
   }
 
   async getSession(sessionId: string) {

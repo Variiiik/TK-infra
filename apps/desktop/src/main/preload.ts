@@ -71,6 +71,11 @@ try {
       ipcRenderer.on('rtc:ice-candidate', h);
       return () => ipcRenderer.removeListener('rtc:ice-candidate', h);
     },
+    onRtcMonitorSwitch: (cb: (d: { monitorId: number }) => void) => {
+      const h = (_: unknown, d: { monitorId: number }) => cb(d);
+      ipcRenderer.on('rtc:switch-monitor', h);
+      return () => ipcRenderer.removeListener('rtc:switch-monitor', h);
+    },
     onUpdateDownloaded: (cb: (d: unknown) => void) => {
       const h = (_: unknown, d: unknown) => cb(d);
       ipcRenderer.on('update:downloaded', h);
