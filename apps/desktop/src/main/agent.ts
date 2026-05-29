@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import https from 'https';
 import http from 'http';
 import os from 'os';
-import screenshot from 'screenshot-desktop';
+import { screen } from 'electron';
 import { WS_EVENTS, AGENT } from '@take-control/shared';
 import type { MonitorInfo } from '@take-control/shared';
 import { AgentLogger } from './logger';
@@ -144,7 +144,7 @@ export class TakeControlAgent {
   private async handleConnect(): Promise<void> {
     this.logger.info('Connected to server');
     const info     = this.getDeviceInfo();
-    const monitors = await this.getMonitors();
+    const monitors = this.getMonitors();
 
     this.socket!.emit(WS_EVENTS.DEVICE_REGISTER, {
       deviceId:     this.state.deviceId,   // null on first run → server creates new
@@ -252,13 +252,17 @@ export class TakeControlAgent {
     socket.on(WS_EVENTS.AGENT_RESTART, () => this.restart());
   }
 
-  private async getMonitors(): Promise<MonitorInfo[]> {
+  private getMonitors(): MonitorInfo[] {
     try {
-      const screens = await screenshot.listDisplays();
-      return screens.map((s: any, i: number) => ({
-        id: i, name: s.name ?? `Monitor ${i + 1}`,
-        width: s.width ?? 1920, height: s.height ?? 1080,
-        isPrimary: i === 0, scaleFactor: s.scaleFactor ?? 1,
+      const displays = screen.getAllDisplays();
+      const primary = screen.getPrimaryDisplay();
+      return displays.map((d, i) => ({
+        id: i,
+        name: `Monitor ${i + 1}`,
+        width: d.size.width,
+        height: d.size.height,
+        isPrimary: d.id === primary.id,
+        scaleFactor: d.scaleFactor,
       }));
     } catch {
       return [{ id: 0, name: 'Primary Monitor', width: 1920, height: 1080, isPrimary: true, scaleFactor: 1 }];

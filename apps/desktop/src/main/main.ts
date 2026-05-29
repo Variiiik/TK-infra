@@ -29,6 +29,11 @@ interface AgentConfig { serverUrl?: string; orgToken?: string; email?: string; p
 function readConfigFile(): AgentConfig | null {
   const locations = [
     path.join(app.getPath('userData'), 'agent.config.json'),
+    // PORTABLE_EXECUTABLE_DIR is set by electron-builder for portable .exe —
+    // this is the directory containing the original .exe, not the temp extract path
+    ...(process.env.PORTABLE_EXECUTABLE_DIR
+      ? [path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'agent.config.json')]
+      : []),
     path.join(process.execPath, '..', 'agent.config.json'),
     path.join(__dirname, '..', 'agent.config.json'),
   ];

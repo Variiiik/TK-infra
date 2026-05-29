@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "concurrently \"tsc -p tsconfig.main.json --watch\" \"vite --config vite.renderer.config.ts\" \"wait-on dist/main.js tcp:5173 && cross-env NODE_ENV=development electron .\"",
     "dev:norenderer": "concurrently \"tsc -p tsconfig.main.json --watch\" \"wait-on dist/main.js && cross-env NODE_ENV=development electron .\"",
-    "build": "tsc -p tsconfig.main.json && vite build --config vite.renderer.config.ts",
+    "build:main": "esbuild src/main/main.ts src/main/preload.ts --bundle --platform=node --target=node18 --external:electron --outdir=dist --sourcemap",
+    "build": "pnpm build:main && vite build --config vite.renderer.config.ts",
     "build:electron": "pnpm build && electron-builder",
     "dist:win": "pnpm build && electron-builder --win",
     "dist:mac": "electron-builder --mac",
@@ -29,20 +30,30 @@
       "assets/**/*"
     ],
     "extraResources": [
-      { "from": "assets/", "to": "assets/" }
+      {
+        "from": "assets/",
+        "to": "assets/"
+      }
     ],
     "win": {
-      "target": ["portable"],
+      "target": [
+        "portable"
+      ],
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.utilities"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/icon.png",
       "category": "Utility"
     },
@@ -56,7 +67,6 @@
   },
   "dependencies": {
     "@take-control/shared": "workspace:*",
-    "screenshot-desktop": "^1.12.7",
     "socket.io-client": "^4.6.1",
     "winston": "^3.11.0"
   },
@@ -65,16 +75,17 @@
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.2.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "concurrently": "^8.2.2",
     "autoprefixer": "^10.4.17",
+    "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "postcss": "^8.4.33",
-    "tailwindcss": "^3.4.1",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
+    "esbuild": "^0.28.0",
+    "postcss": "^8.4.33",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "rimraf": "^5.0.5",
+    "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
     "wait-on": "^7.2.0"
   }

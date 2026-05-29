@@ -31,7 +31,8 @@
       "Bash(Get-ChildItem -Path . -Depth 2)",
       "Bash(Select-Object -Property FullName, PSIsContainer)",
       "Bash(Format-Table -AutoSize)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(pnpm remove *)"
     ]
   }
 }
