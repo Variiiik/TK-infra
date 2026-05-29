@@ -115,6 +115,8 @@ export function RemoteViewPage() {
     pc.addTransceiver('video', { direction: 'recvonly' });
 
     const sendOffer = () => {
+      // Guard: don't re-offer if already negotiating or connection is established
+      if (pc.signalingState !== 'stable' || pc.remoteDescription) return;
       pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
         .then(() => {
