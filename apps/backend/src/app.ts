@@ -18,6 +18,7 @@ import userRoutes from './modules/user/user.routes';
 import deviceRoutes from './modules/device/device.routes';
 import auditRoutes from './modules/audit/audit.routes';
 import downloadRoutes from './modules/download/download.routes';
+import orgRoutes from './modules/org/org.routes';
 
 export function createApp() {
   const app = express();
@@ -83,6 +84,7 @@ export function createApp() {
   app.use(`${apiPrefix}/users`, userRoutes);
   app.use(`${apiPrefix}/devices`, deviceRoutes);
   app.use(`${apiPrefix}/audit`, auditRoutes);
+  app.use(`${apiPrefix}/organizations`, orgRoutes);
 
   // ─── Public download page (no auth needed) ────────────────────
   app.use('/', downloadRoutes);

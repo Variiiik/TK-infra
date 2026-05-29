@@ -1,10 +1,56 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, Shield, Bell, Users, Key, Building } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/auth.store';
+import { organizationApi } from '../services/api';
 
 export function SettingsPage() {
   const user = useAuthStore(s => s.user);
   const [activeTab, setActiveTab] = useState('profile');
+
+  const [orgSettings, setOrgSettings] = useState({
+    name: '',
+    requireSessionApproval: true,
+    allowFileTransfer: true,
+    allowChat: true,
+    allowRecording: false,
+  });
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgSaving, setOrgSaving] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'organization') return;
+    setOrgLoading(true);
+    organizationApi.getSettings()
+      .then(data => setOrgSettings({
+        name: data.name ?? '',
+        requireSessionApproval: data.requireSessionApproval,
+        allowFileTransfer: data.allowFileTransfer,
+        allowChat: data.allowChat,
+        allowRecording: data.allowRecording,
+      }))
+      .catch(() => toast.error('Failed to load organization settings'))
+      .finally(() => setOrgLoading(false));
+  }, [activeTab]);
+
+  const handleOrgSave = async () => {
+    setOrgSaving(true);
+    try {
+      const updated = await organizationApi.updateSettings(orgSettings);
+      setOrgSettings({
+        name: updated.name ?? '',
+        requireSessionApproval: updated.requireSessionApproval,
+        allowFileTransfer: updated.allowFileTransfer,
+        allowChat: updated.allowChat,
+        allowRecording: updated.allowRecording,
+      });
+      toast.success('Organization settings saved');
+    } catch {
+      toast.error('Failed to save organization settings');
+    } finally {
+      setOrgSaving(false);
+    }
+  };
 
   const TABS = [
     { id: 'profile', label: 'Profile', icon: Users },
@@ -127,27 +173,44 @@ export function SettingsPage() {
           {activeTab === 'organization' && (
             <div className="space-y-4">
               <h3 className="font-semibold text-white">Organization Settings</h3>
-              <div>
-                <label className="label">Organization Name</label>
-                <input className="input" placeholder="Your Organization" />
-              </div>
-              <div className="space-y-3">
-                {[
-                  { key: 'requireApproval', label: 'Require session approval', desc: 'Users must approve before technician can connect' },
-                  { key: 'allowFileTransfer', label: 'Allow file transfer', desc: 'Enable file transfer between technician and user' },
-                  { key: 'allowChat', label: 'Allow chat', desc: 'Enable real-time chat during sessions' },
-                  { key: 'allowRecording', label: 'Allow session recording', desc: 'Technicians can record remote sessions' },
-                ].map(s => (
-                  <label key={s.key} className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" defaultChecked={s.key !== 'allowRecording'} className="mt-1 w-4 h-4 accent-primary-600" />
-                    <div>
-                      <p className="text-sm font-medium text-white">{s.label}</p>
-                      <p className="text-xs text-slate-500">{s.desc}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              <button className="btn-primary">Save Organization Settings</button>
+              {orgLoading ? (
+                <p className="text-sm text-slate-400">Loading...</p>
+              ) : (
+                <>
+                  <div>
+                    <label className="label">Organization Name</label>
+                    <input
+                      className="input"
+                      value={orgSettings.name}
+                      onChange={e => setOrgSettings(s => ({ ...s, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    {([
+                      { key: 'requireSessionApproval', label: 'Require session approval', desc: 'Users must approve before technician can connect' },
+                      { key: 'allowFileTransfer', label: 'Allow file transfer', desc: 'Enable file transfer between technician and user' },
+                      { key: 'allowChat', label: 'Allow chat', desc: 'Enable real-time chat during sessions' },
+                      { key: 'allowRecording', label: 'Allow session recording', desc: 'Technicians can record remote sessions' },
+                    ] as const).map(s => (
+                      <label key={s.key} className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={orgSettings[s.key]}
+                          onChange={e => setOrgSettings(prev => ({ ...prev, [s.key]: e.target.checked }))}
+                          className="mt-1 w-4 h-4 accent-primary-600"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-white">{s.label}</p>
+                          <p className="text-xs text-slate-500">{s.desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <button className="btn-primary" onClick={handleOrgSave} disabled={orgSaving}>
+                    {orgSaving ? 'Saving...' : 'Save Organization Settings'}
+                  </button>
+                </>
+              )}
             </div>
           )}
 

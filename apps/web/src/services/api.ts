@@ -143,3 +143,13 @@ export const auditApi = {
   list: (params?: Record<string, unknown>) =>
     api.get('/audit', { params }).then(r => r.data),
 };
+
+// ─── Organization API ─────────────────────────────────────────────
+
+export const organizationApi = {
+  getSettings: () =>
+    api.get('/organizations/settings').then(r => r.data.data),
+
+  updateSettings: (data: Record<string, unknown>) =>
+    api.patch('/organizations/settings', data).then(r => r.data.data),
+};

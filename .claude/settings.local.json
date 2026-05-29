@@ -27,7 +27,11 @@
       "PowerShell(cd \"c:\\\\Users\\\\Klaus\\\\take control-infra\\\\apps\\\\desktop\"; $env:CSC_IDENTITY_AUTO_DISCOVERY = \"false\"; pnpm exec electron-builder --win 2>&1 | Where-Object { $_ -match \"\\(error|Error|ERR|warn|packaging|building|⨯|✓\\)\" } | Select-Object -First 20)",
       "PowerShell(Get-ChildItem \"c:\\\\Users\\\\Klaus\\\\take control-infra\\\\apps\\\\desktop\\\\dist-release\" | Select-Object Name, @{N='MB';E={[math]::Round\\($_.Length/1MB,1\\)}}, LastWriteTime)",
       "PowerShell(Get-Item \"c:\\\\Users\\\\Klaus\\\\take control-infra\\\\apps\\\\desktop\\\\dist-release\\\\TakeControl Agent 1.0.0.exe\" | Select-Object Name, @{N='MB';E={[math]::Round\\($_.Length/1MB,0\\)}}, LastWriteTime)",
-      "Bash(curl -s \"http://192.168.2.30:4000/socket.io/?EIO=4&transport=polling\")"
+      "Bash(curl -s \"http://192.168.2.30:4000/socket.io/?EIO=4&transport=polling\")",
+      "Bash(Get-ChildItem -Path . -Depth 2)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(xargs ls -la)"
     ]
   }
 }
