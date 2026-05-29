@@ -91,12 +91,9 @@ export default function App() {
 
     const cleanup = () => { pc?.close(); pc = null; };
 
-    const createPeerConnection = (sessionData: any) => {
+    const initPeerConnection = (sessionData: any) => {
       cleanup();
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
-
+      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       pc.onicecandidate = (e) => {
         if (e.candidate) {
           bridge.sendRtcIceCandidate({
@@ -106,40 +103,40 @@ export default function App() {
           });
         }
       };
-
-      // Capture screen and add tracks
-      bridge.getScreenSources().then((sources) => {
-        const source = sources[0];
-        if (!source) return;
-        return (navigator.mediaDevices as any).getUserMedia({
-          audio: false,
-          video: {
-            mandatory: {
-              chromeMediaSource:   'desktop',
-              chromeMediaSourceId: source.id,
-              maxWidth:  1920,
-              maxHeight: 1080,
-              maxFrameRate: 30,
-            },
-          },
-        });
-      }).then((stream: MediaStream) => {
-        stream?.getTracks().forEach(t => pc?.addTrack(t, stream));
-      }).catch((err: unknown) => console.error('[WebRTC] Screen capture failed:', err));
-
       return pc;
     };
 
-    // Session approved → we are the answer side (agent sends to technician)
+    const captureScreen = async (): Promise<void> => {
+      const sources = await bridge.getScreenSources();
+      const source = sources[0];
+      if (!source || !pc) return;
+      const stream: MediaStream = await (navigator.mediaDevices as any).getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource:   'desktop',
+            chromeMediaSourceId: source.id,
+            maxWidth:  1920,
+            maxHeight: 1080,
+            maxFrameRate: 30,
+          },
+        },
+      });
+      stream.getTracks().forEach(t => pc?.addTrack(t, stream));
+    };
+
+    // Session approved — just pre-init the pc so ICE can start warming up
     const unRtcStart = bridge.onRtcSessionStart((data: any) => {
-      createPeerConnection(data);
+      initPeerConnection(data);
     });
 
-    // Technician sends offer → create answer
+    // Technician sends offer → add screen track FIRST, then create answer
     const unOffer = bridge.onRtcOffer(async (data: any) => {
-      if (!pc) createPeerConnection(data);
+      if (!pc) initPeerConnection(data);
       try {
         await pc!.setRemoteDescription(new RTCSessionDescription(data.signal));
+        // Tracks must be added before createAnswer so they appear in the SDP
+        if (pc!.getSenders().length === 0) await captureScreen();
         const answer = await pc!.createAnswer();
         await pc!.setLocalDescription(answer);
         bridge.sendRtcAnswer({

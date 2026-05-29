@@ -65,26 +65,27 @@ export function RemoteViewPage() {
       pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
     };
 
+    let animFrameId = 0;
     pc.ontrack = (event) => {
       const stream = event.streams[0];
-      if (canvasRef.current) {
-        const video = document.createElement('video');
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.onloadedmetadata = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
-          const draw = () => {
-            ctx?.drawImage(video, 0, 0);
-            requestAnimationFrame(draw);
-          };
-          draw();
-          setIsConnected(true);
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      video.autoplay = true;
+      video.play().catch(() => {});
+      video.onloadedmetadata = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        const draw = () => {
+          ctx?.drawImage(video, 0, 0);
+          animFrameId = requestAnimationFrame(draw);
         };
-      }
+        draw();
+        setIsConnected(true);
+      };
     };
 
     pc.onicecandidate = (e) => {
@@ -154,6 +155,7 @@ export function RemoteViewPage() {
 
     return () => {
       pc.close();
+      cancelAnimationFrame(animFrameId);
       socket.off(WS_EVENTS.RTC_ANSWER);
       socket.off(WS_EVENTS.RTC_ICE_CANDIDATE);
       socket.off(WS_EVENTS.CHAT_MESSAGE);
