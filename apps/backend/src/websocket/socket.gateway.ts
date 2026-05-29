@@ -336,11 +336,13 @@ export class SocketGateway {
 
   private handleHeartbeat(socket: AuthenticatedSocket): void {
     socket.on(WS_EVENTS.HEARTBEAT, async (data: { deviceId?: string }) => {
-      if (data.deviceId) {
-        await prisma.device.update({
-          where: { id: data.deviceId },
-          data: { lastSeenAt: new Date() },
-        }).catch(() => {});
+      const deviceId = data.deviceId ?? socket.deviceId;
+      if (deviceId) {
+        // Refresh DB timestamp and Redis TTL so getDeviceSocket() never expires on an active device
+        await Promise.all([
+          prisma.device.update({ where: { id: deviceId }, data: { lastSeenAt: new Date() } }).catch(() => {}),
+          setDeviceOnline(deviceId, socket.id),
+        ]);
       }
       socket.emit(WS_EVENTS.HEARTBEAT_ACK, { timestamp: Date.now() });
     });
@@ -395,9 +397,11 @@ export class SocketGateway {
     if (!session || session.status !== 'active' || session.controlMode !== 'full_control') return;
 
     const deviceSocket = await getDeviceSocket(session.deviceId);
-    if (deviceSocket) {
-      this.io.to(deviceSocket).emit(event, data);
+    if (!deviceSocket) {
+      logger.warn('forwardToDevice: device socket not found in Redis', { deviceId: session.deviceId, event });
+      return;
     }
+    this.io.to(deviceSocket).emit(event, data);
   }
 
   getIO(): Server {
