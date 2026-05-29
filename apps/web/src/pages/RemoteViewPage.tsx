@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Monitor, Maximize2, Minimize2, PhoneOff, MousePointer,
-  Eye, MessageSquare, Send, ChevronDown, Loader2, AlertCircle
+  Eye, MessageSquare, Send, Loader2, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { sessionApi } from '../services/api';
@@ -103,17 +103,19 @@ export function RemoteViewPage() {
       }
     };
 
-    // Sends (or re-sends) the WebRTC offer to the agent.
-    // Called when session is active, and again on SESSION_APPROVED in case
-    // the agent connected after the initial offer was sent.
+    // Add an explicit recvonly video transceiver so the offer SDP has a=recvonly.
+    // The legacy offerToReceiveVideo:true option is broken in Electron 28 / Chrome 120+
+    // and produces a=inactive, which prevents ontrack from ever firing.
+    pc.addTransceiver('video', { direction: 'recvonly' });
+
     const sendOffer = () => {
-      pc.createOffer({ offerToReceiveVideo: true })
+      pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
         .then(() => {
           socket.emit(WS_EVENTS.RTC_OFFER, {
             sessionId,
             toPeerId: session.device?.userId,
-            signal: pc.localDescription,
+            signal: { type: pc.localDescription!.type, sdp: pc.localDescription!.sdp },
           });
         })
         .catch(console.error);
@@ -413,7 +415,7 @@ export function RemoteViewPage() {
       </div>
 
       {/* Session approval overlay */}
-      {session.status === 'waiting_approval' && (
+      {sessionStatus === 'waiting_approval' && (
         <div className="absolute inset-0 bg-dark-950/80 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="card max-w-sm w-full text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center mx-auto">
