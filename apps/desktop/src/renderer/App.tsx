@@ -96,6 +96,7 @@ export default function App() {
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       pc.onicecandidate = (e) => {
         if (e.candidate) {
+          console.log('[RTC] sending ice candidate to', sessionData.fromPeerId ?? sessionData.technicianId);
           bridge.sendRtcIceCandidate({
             sessionId: sessionData.sessionId,
             toPeerId:  sessionData.fromPeerId ?? sessionData.technicianId,
@@ -103,6 +104,7 @@ export default function App() {
           });
         }
       };
+      pc.oniceconnectionstatechange = () => console.log('[RTC] ICE state:', pc?.iceConnectionState);
       return pc;
     };
 
@@ -125,34 +127,36 @@ export default function App() {
       stream.getTracks().forEach(t => pc?.addTrack(t, stream));
     };
 
-    // Session approved — pre-init pc so ICE warms up before the offer arrives.
-    // Guard: if onRtcOffer already created pc (offer beat SESSION_APPROVED), don't destroy it.
     const unRtcStart = bridge.onRtcSessionStart((data: any) => {
+      console.log('[RTC] session-start received, pc exists:', !!pc);
       if (!pc) initPeerConnection(data);
     });
 
-    // Technician sends offer → add screen track FIRST, then create answer
     const unOffer = bridge.onRtcOffer(async (data: any) => {
+      console.log('[RTC] offer received, pc exists:', !!pc, 'sessionId:', data.sessionId);
       if (!pc) initPeerConnection(data);
       try {
         await pc!.setRemoteDescription(new RTCSessionDescription(data.signal));
-        // Tracks must be added before createAnswer so they appear in the SDP
+        console.log('[RTC] remote description set, capturing screen...');
         if (pc!.getSenders().length === 0) await captureScreen();
+        console.log('[RTC] senders after capture:', pc!.getSenders().length);
         const answer = await pc!.createAnswer();
         await pc!.setLocalDescription(answer);
+        console.log('[RTC] answer created, sending...');
         bridge.sendRtcAnswer({
           sessionId: data.sessionId,
           toPeerId:  data.fromPeerId,
           signal:    answer,
         });
-      } catch (err) { console.error('[WebRTC] Answer failed:', err); }
+        console.log('[RTC] answer sent to', data.fromPeerId);
+      } catch (err) { console.error('[RTC] answer failed:', err); }
     });
 
     const unIce = bridge.onRtcIceCandidate((data: any) => {
       const c = data.candidate;
-      // Skip end-of-candidates signals (sdpMid and sdpMLineIndex both null)
       if (!c || (c.sdpMid == null && c.sdpMLineIndex == null)) return;
-      pc?.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+      console.log('[RTC] applying ice candidate, has remote desc:', !!pc?.remoteDescription);
+      pc?.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error('[RTC] addIceCandidate failed:', e));
     });
 
     const unEnd = bridge.onSessionEnded(() => cleanup());
