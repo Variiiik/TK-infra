@@ -59,6 +59,12 @@ export function RemoteViewPage() {
     const pc = new RTCPeerConnection({ iceServers });
     peerRef.current = pc;
 
+    // Queue candidates that arrive before the remote description is set
+    const pendingCandidates: RTCIceCandidateInit[] = [];
+    const applyCandidate = (c: RTCIceCandidateInit) => {
+      pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+    };
+
     pc.ontrack = (event) => {
       const stream = event.streams[0];
       if (canvasRef.current) {
@@ -102,16 +108,21 @@ export function RemoteViewPage() {
         });
       });
 
-    socket.on(WS_EVENTS.RTC_ANSWER, (data: any) => {
-      if (data.sessionId === sessionId) {
-        pc.setRemoteDescription(new RTCSessionDescription(data.signal));
-      }
+    socket.on(WS_EVENTS.RTC_ANSWER, async (data: any) => {
+      // Guard: wrong session or null/malformed signal
+      if (data.sessionId !== sessionId || !data.signal?.type) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(data.signal));
+      // Drain any candidates that arrived before the answer
+      pendingCandidates.splice(0).forEach(applyCandidate);
     });
 
     socket.on(WS_EVENTS.RTC_ICE_CANDIDATE, (data: any) => {
-      if (data.sessionId === sessionId) {
-        pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
+      if (data.sessionId !== sessionId) return;
+      const c = data.candidate;
+      // Skip end-of-candidates signals (sdpMid and sdpMLineIndex both null)
+      if (!c || (c.sdpMid == null && c.sdpMLineIndex == null)) return;
+      if (!pc.remoteDescription) { pendingCandidates.push(c); return; }
+      applyCandidate(c);
     });
 
     socket.on(WS_EVENTS.CHAT_MESSAGE, (msg: ChatMessage) => {
@@ -181,12 +192,17 @@ export function RemoteViewPage() {
   };
 
   const handleControlToggle = async () => {
+    if (session?.status !== 'active') {
+      toast.error('Session must be active to change control mode');
+      return;
+    }
     const newMode = controlMode === 'full_control' ? 'view_only' : 'full_control';
     try {
       await sessionApi.transferControl(sessionId!, newMode);
       setControlMode(newMode);
-    } catch {
-      toast.error('Failed to change control mode');
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message ?? 'Failed to change control mode';
+      toast.error(msg);
     }
   };
 
