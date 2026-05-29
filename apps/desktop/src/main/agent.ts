@@ -206,6 +206,7 @@ export class TakeControlAgent {
     });
 
     socket.on(WS_EVENTS.SESSION_CONTROL_TRANSFER, (data: any) => {
+      this.logger.info('Control transfer received', { mode: data.mode, sessionId: data.sessionId });
       this.state.controlMode = data.mode;
       this.config.onControlChange?.(data.mode);
     });
@@ -225,7 +226,10 @@ export class TakeControlAgent {
 
     // ─── Input events: handled in Node.js via PowerShell/xdotool ────────────
     socket.on(WS_EVENTS.INPUT_MOUSE_MOVE, (data: any) => {
-      if (this.state.controlMode !== 'full_control') return;
+      if (this.state.controlMode !== 'full_control') {
+        this.logger.debug('Mouse move ignored, controlMode:', { controlMode: this.state.controlMode });
+        return;
+      }
       this.inputService.moveMouse(data.x, data.y);
     });
 

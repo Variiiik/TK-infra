@@ -124,7 +124,9 @@ public class M { [DllImport("user32.dll")] public static extern void mouse_event
     execFile('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
       '-Command', script.trim(),
-    ], { windowsHide: true }, () => {});
+    ], { windowsHide: true }, (err, _stdout, stderr) => {
+      if (err) console.error('[INPUT] PowerShell error:', err.message, stderr?.trim());
+    });
   }
 }
 

@@ -92,9 +92,11 @@ router.post('/:sessionId/end', requirePermission('sessions:end'), asyncHandler(a
 
 // Transfer control
 router.post('/:sessionId/control', requirePermission('sessions:control'), asyncHandler(async (req, res) => {
+  console.log('[CONTROL] Request received', req.params.sessionId, req.body.mode, 'user:', req.user!.sub);
   const schema = z.object({ mode: z.enum(['view_only', 'full_control', 'none']) });
   const { mode } = schema.parse(req.body);
   const result = await sessionService.transferControl(req.params.sessionId, req.user!.sub, mode);
+  console.log('[CONTROL] Done', result);
   res.json(createApiResponse(result));
 }));
 
