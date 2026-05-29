@@ -1,9 +1,11 @@
 import type { ControlMode } from '@take-control/shared';
+import { WS_EVENTS } from '@take-control/shared';
 import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { ApiError } from '../../utils/api-error';
 import { createModuleLogger } from '../../lib/logger';
 import { setDeviceOnline, setDeviceOffline, getDeviceSocket } from '../../lib/redis';
+import { emitToUser } from '../../lib/gateway';
 
 const logger = createModuleLogger('session');
 
@@ -61,11 +63,13 @@ export class SessionService {
     if (!technician) throw new ApiError(404, 'USER_NOT_FOUND', 'Technician not found');
 
     const org = await prisma.organization.findUnique({ where: { id: request.organizationId } });
+    const needsApproval = org?.requireSessionApproval ?? true;
+    const sessionStatus = needsApproval ? 'waiting_approval' : 'active';
 
     const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.supportRequest.update({
         where: { id: requestId },
-        data: { status: org?.requireSessionApproval ? 'waiting_approval' : 'approved', technicianId },
+        data: { status: needsApproval ? 'waiting_approval' : 'active', technicianId },
       });
 
       const sess = await tx.session.create({
@@ -75,9 +79,12 @@ export class SessionService {
           technicianId,
           userId: request.userId,
           organizationId: request.organizationId,
-          status: org?.requireSessionApproval ? 'waiting_approval' : 'approved',
+          status: sessionStatus,
           controlMode: 'none',
           encryptionMethod: 'AES-256-GCM',
+          // When approval is not required, session starts immediately
+          startedAt: needsApproval ? undefined : new Date(),
+          approvedAt: needsApproval ? undefined : new Date(),
         },
         include: {
           device: true,
@@ -94,7 +101,16 @@ export class SessionService {
       return sess;
     });
 
-    logger.info('Session created', { sessionId: session.id, technicianId });
+    // When no approval needed, notify the agent so it can prepare WebRTC
+    if (!needsApproval && session.device?.userId) {
+      emitToUser(session.device.userId, WS_EVENTS.SESSION_APPROVED, {
+        sessionId: session.id,
+        technicianId,
+        technician: session.technician,
+      });
+    }
+
+    logger.info('Session created', { sessionId: session.id, technicianId, status: sessionStatus });
     return session;
   }
 
