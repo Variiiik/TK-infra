@@ -226,10 +226,7 @@ export class TakeControlAgent {
 
     // ─── Input events: handled in Node.js via PowerShell/xdotool ────────────
     socket.on(WS_EVENTS.INPUT_MOUSE_MOVE, (data: any) => {
-      if (this.state.controlMode !== 'full_control') {
-        this.logger.debug('Mouse move ignored, controlMode:', { controlMode: this.state.controlMode });
-        return;
-      }
+      if (this.state.controlMode !== 'full_control') return;
       this.inputService.moveMouse(data.x, data.y);
     });
 

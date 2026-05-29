@@ -71,20 +71,15 @@ export function RemoteViewPage() {
       pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
     };
 
-    pc.oniceconnectionstatechange = () => console.log('[RTC] dashboard ICE:', pc.iceConnectionState);
-    pc.onconnectionstatechange = () => console.log('[RTC] dashboard connection:', pc.connectionState);
-
     let animFrameId = 0;
     pc.ontrack = (event) => {
-      console.log('[RTC] ontrack fired, streams:', event.streams.length, 'track kind:', event.track.kind);
       const stream = event.streams[0];
       const video = document.createElement('video');
       video.srcObject = stream;
       video.muted = true;
       video.autoplay = true;
-      video.play().catch(e => console.error('[RTC] video.play failed:', e));
+      video.play().catch(() => {});
       video.onloadedmetadata = () => {
-        console.log('[RTC] video metadata loaded, size:', video.videoWidth, 'x', video.videoHeight);
         const canvas = canvasRef.current;
         if (!canvas) return;
         canvas.width = video.videoWidth;
@@ -129,13 +124,7 @@ export function RemoteViewPage() {
         .catch(console.error);
     };
 
-    console.log('[RTC] session status:', session.status, 'device userId:', session.device?.userId);
-    if (session.status === 'active') {
-      console.log('[RTC] sending initial offer');
-      sendOffer();
-    }
-    pc.onnegotiationneeded = () => console.log('[RTC] negotiation needed');
-    pc.onsignalingstatechange = () => console.log('[RTC] signaling state:', pc.signalingState);
+    if (session.status === 'active') sendOffer();
 
     // Re-send when session gets approved (agent may have missed the first offer)
     socket.on(WS_EVENTS.SESSION_APPROVED, (data: any) => {
@@ -146,12 +135,8 @@ export function RemoteViewPage() {
     });
 
     socket.on(WS_EVENTS.RTC_ANSWER, async (data: any) => {
-      console.log('[RTC] answer received, sessionId match:', data.sessionId === sessionId, 'has signal type:', !!data.signal?.type);
       if (data.sessionId !== sessionId || !data.signal?.type) return;
-      const videoDir = data.signal.sdp?.match(/m=video.*\r?\n(.*\r?\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
-      console.log('[RTC] answer video direction:', videoDir?.[2] ?? 'NOT FOUND');
       await pc.setRemoteDescription(new RTCSessionDescription(data.signal));
-      console.log('[RTC] remote description set, draining', pendingCandidates.length, 'pending candidates');
       pendingCandidates.splice(0).forEach(applyCandidate);
     });
 

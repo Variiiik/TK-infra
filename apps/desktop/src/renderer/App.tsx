@@ -97,16 +97,13 @@ export default function App() {
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       pc.onicecandidate = (e) => {
         if (e.candidate) {
-          console.log('[RTC] sending ice candidate to', sessionData.fromPeerId ?? sessionData.technicianId);
           bridge.sendRtcIceCandidate({
             sessionId: sessionData.sessionId,
             toPeerId:  sessionData.fromPeerId ?? sessionData.technicianId,
-            // Serialize to plain object to survive Electron IPC structured clone
             candidate: e.candidate.toJSON(),
           });
         }
       };
-      pc.oniceconnectionstatechange = () => console.log('[RTC] ICE state:', pc?.iceConnectionState);
       return pc;
     };
 
@@ -130,42 +127,28 @@ export default function App() {
     };
 
     const unRtcStart = bridge.onRtcSessionStart((data: any) => {
-      console.log('[RTC] session-start received, pc exists:', !!pc);
       if (!pc) initPeerConnection(data);
     });
 
     const unOffer = bridge.onRtcOffer(async (data: any) => {
-      console.log('[RTC] offer received, pc exists:', !!pc, 'sessionId:', data.sessionId);
       if (!pc) initPeerConnection(data);
       try {
-        // Capture screen BEFORE setRemoteDescription: creates a sendrecv transceiver
-        // that Chrome can match with the offer's recvonly m-line → answer = sendonly.
         if (pc!.getSenders().length === 0) await captureScreen();
-        console.log('[RTC] senders after capture:', pc!.getSenders().length);
-
-        const offerVideoDir = data.signal?.sdp?.match(/m=video[^\n]*\n(?:[^\n]*\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
-        console.log('[RTC] offer video direction:', offerVideoDir?.[1] ?? 'NOT FOUND');
-
         await pc!.setRemoteDescription(new RTCSessionDescription(data.signal));
-
         const answer = await pc!.createAnswer();
         await pc!.setLocalDescription(answer);
-        const videoLine = answer.sdp?.match(/m=video[^\n]*\n(?:[^\n]*\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
-        console.log('[RTC] answer video direction:', videoLine?.[1] ?? 'NOT FOUND');
         bridge.sendRtcAnswer({
           sessionId: data.sessionId,
           toPeerId:  data.fromPeerId,
           signal:    { type: answer.type, sdp: answer.sdp },
         });
-        console.log('[RTC] answer sent to', data.fromPeerId);
       } catch (err) { console.error('[RTC] answer failed:', err); }
     });
 
     const unIce = bridge.onRtcIceCandidate((data: any) => {
       const c = data.candidate;
       if (!c || (c.sdpMid == null && c.sdpMLineIndex == null)) return;
-      console.log('[RTC] applying ice candidate, has remote desc:', !!pc?.remoteDescription);
-      pc?.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error('[RTC] addIceCandidate failed:', e));
+      pc?.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
     });
 
     const unMonitor = bridge.onRtcMonitorSwitch(async ({ monitorId }) => {
