@@ -100,7 +100,8 @@ export default function App() {
           bridge.sendRtcIceCandidate({
             sessionId: sessionData.sessionId,
             toPeerId:  sessionData.fromPeerId ?? sessionData.technicianId,
-            candidate: e.candidate,
+            // Serialize to plain object to survive Electron IPC structured clone
+            candidate: e.candidate.toJSON(),
           });
         }
       };
@@ -142,11 +143,15 @@ export default function App() {
         console.log('[RTC] senders after capture:', pc!.getSenders().length);
         const answer = await pc!.createAnswer();
         await pc!.setLocalDescription(answer);
+        // Log video direction from SDP to confirm track is included
+        const videoLine = answer.sdp?.match(/m=video.*\r?\n(.*\r?\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
+        console.log('[RTC] answer video direction:', videoLine?.[2] ?? 'NOT FOUND in SDP');
         console.log('[RTC] answer created, sending...');
+        // Serialize to plain object — RTCSessionDescription getters are lost in IPC structured clone
         bridge.sendRtcAnswer({
           sessionId: data.sessionId,
           toPeerId:  data.fromPeerId,
-          signal:    answer,
+          signal:    { type: answer.type, sdp: answer.sdp },
         });
         console.log('[RTC] answer sent to', data.fromPeerId);
       } catch (err) { console.error('[RTC] answer failed:', err); }

@@ -124,6 +124,8 @@ export function RemoteViewPage() {
       console.log('[RTC] sending initial offer');
       sendOffer();
     }
+    pc.onnegotiationneeded = () => console.log('[RTC] negotiation needed');
+    pc.onsignalingstatechange = () => console.log('[RTC] signaling state:', pc.signalingState);
 
     // Re-send when session gets approved (agent may have missed the first offer)
     socket.on(WS_EVENTS.SESSION_APPROVED, (data: any) => {
@@ -136,6 +138,8 @@ export function RemoteViewPage() {
     socket.on(WS_EVENTS.RTC_ANSWER, async (data: any) => {
       console.log('[RTC] answer received, sessionId match:', data.sessionId === sessionId, 'has signal type:', !!data.signal?.type);
       if (data.sessionId !== sessionId || !data.signal?.type) return;
+      const videoDir = data.signal.sdp?.match(/m=video.*\r?\n(.*\r?\n)*?a=(sendonly|recvonly|sendrecv|inactive)/);
+      console.log('[RTC] answer video direction:', videoDir?.[2] ?? 'NOT FOUND');
       await pc.setRemoteDescription(new RTCSessionDescription(data.signal));
       console.log('[RTC] remote description set, draining', pendingCandidates.length, 'pending candidates');
       pendingCandidates.splice(0).forEach(applyCandidate);
