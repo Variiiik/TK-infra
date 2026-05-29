@@ -123,9 +123,9 @@ function createWindow() {
     if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
   }, 3000);
 
-  mainWindow.on('close', (e) => {
-    e.preventDefault();
-    mainWindow?.hide();
+  mainWindow.on('close', () => {
+    agent?.stop();
+    app.quit();
   });
 }
 
@@ -204,7 +204,7 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('window-all-closed', () => { /* stay in tray */ });
+app.on('window-all-closed', () => { app.quit(); });
 app.on('before-quit', () => { agent?.stop(); });
 
 process.on('uncaughtException', (err) => {
