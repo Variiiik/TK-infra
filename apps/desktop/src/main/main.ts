@@ -6,6 +6,24 @@ import { AgentLogger } from './logger';
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Load root .env so TC_SERVER_URL, TC_ORG_TOKEN etc. are available in dev
+// without requiring dotenv as a dependency.
+// In production the user supplies env vars or agent.config.json instead.
+if (isDev) {
+  try {
+    // dist/main.js → apps/desktop/dist → apps/desktop → apps → root
+    // dist/main.js → apps/desktop/dist → apps/desktop → apps → root
+    const envPath = path.join(__dirname, '..', '..', '..', '.env');
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (m && process.env[m[1]] === undefined) {
+        process.env[m[1]] = m[2].replace(/^"(.*)"$/, '$1').trim();
+      }
+    }
+  } catch { /* no .env file — that's fine */ }
+}
+
 interface AgentConfig { serverUrl?: string; orgToken?: string; email?: string; password?: string; }
 
 function readConfigFile(): AgentConfig | null {

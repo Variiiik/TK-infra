@@ -140,20 +140,21 @@ function fixSeedScript() {
   }
 }
 
-// FIX: Fix double /api/v1/api/v1 prefix in web service
-function fixApiPrefix() {
-  const apiServicePath = path.join(ROOT, 'apps/web/src/services/api.ts');
-  if (!fs.existsSync(apiServicePath)) return;
+// FIX: Create apps/web/.env so the browser knows where the backend is.
+// VITE_API_URL must point to the backend origin only (no /api/v1 path suffix).
+// api.ts already appends /api/v1 to the baseURL — the env var must not repeat it.
+function fixWebEnv() {
+  const webEnvPath = path.join(ROOT, 'apps/web/.env');
+  if (fs.existsSync(webEnvPath)) return;
 
-  let content = fs.readFileSync(apiServicePath, 'utf8');
-  if (content.includes('baseURL: `${BASE_URL}/api/v1`')) {
-    content = content.replace(
-      'baseURL: `${BASE_URL}/api/v1`',
-      'baseURL: `${BASE_URL}`'
-    );
-    fs.writeFileSync(apiServicePath, content);
-    console.log('✅ Fixed double /api/v1 prefix in apps/web/src/services/api.ts');
-  }
+  const rootEnv = fs.readFileSync(path.join(ROOT, '.env'), 'utf8');
+  // Prefer TC_SERVER_URL (LAN-accessible) over API_URL (localhost-only)
+  const tcMatch = rootEnv.match(/^TC_SERVER_URL=(.+)$/m);
+  const apiMatch = rootEnv.match(/^API_URL=(.+)$/m);
+  const backendUrl = (tcMatch?.[1] ?? apiMatch?.[1] ?? 'http://localhost:4000').trim();
+
+  fs.writeFileSync(webEnvPath, `VITE_API_URL=${backendUrl}\n`);
+  console.log(`✅ Created apps/web/.env with VITE_API_URL=${backendUrl}`);
 }
 
 // FIX: Exclude desktop app from dev command (Electron needs GUI/display)
@@ -224,7 +225,7 @@ async function main() {
   console.log('\n🔧 Applying compatibility fixes...');
   fixDockerCompose();
   fixSeedScript();
-  fixApiPrefix();
+  fixWebEnv();
   fixDevScript();
 
   console.log('\n📦 Installing dependencies...');

@@ -122,7 +122,24 @@ export class SocketGateway {
       try {
         let device;
 
+        const newDeviceData = {
+          name: data.hostname,
+          hostname: data.hostname,
+          os: data.os as any,
+          osVersion: data.osVersion,
+          agentVersion: data.agentVersion,
+          agentStatus: 'running' as const,
+          status: 'online' as const,
+          ipAddress: socket.handshake.address,
+          userId: socket.user!.sub,
+          organizationId: socket.user!.organizationId,
+          monitorsJson: JSON.stringify(data.monitors),
+          cpuInfo: data.cpuInfo,
+          ramInfo: data.ramInfo,
+        };
+
         if (data.deviceId) {
+          // If the saved deviceId no longer exists (e.g. DB was reset), fall back to creating a new device
           device = await prisma.device.update({
             where: { id: data.deviceId },
             data: {
@@ -133,25 +150,9 @@ export class SocketGateway {
               monitorsJson: JSON.stringify(data.monitors),
               lastSeenAt: new Date(),
             },
-          });
+          }).catch(() => prisma.device.create({ data: newDeviceData }));
         } else {
-          device = await prisma.device.create({
-            data: {
-              name: data.hostname,
-              hostname: data.hostname,
-              os: data.os as any,
-              osVersion: data.osVersion,
-              agentVersion: data.agentVersion,
-              agentStatus: 'running',
-              status: 'online',
-              ipAddress: socket.handshake.address,
-              userId: socket.user!.sub,
-              organizationId: socket.user!.organizationId,
-              monitorsJson: JSON.stringify(data.monitors),
-              cpuInfo: data.cpuInfo,
-              ramInfo: data.ramInfo,
-            },
-          });
+          device = await prisma.device.create({ data: newDeviceData });
         }
 
         socket.deviceId = device.id;
