@@ -98,16 +98,32 @@ export function RemoteViewPage() {
       }
     };
 
-    // Create offer
-    pc.createOffer({ offerToReceiveVideo: true })
-      .then(offer => pc.setLocalDescription(offer))
-      .then(() => {
-        socket.emit(WS_EVENTS.RTC_OFFER, {
-          sessionId,
-          toPeerId: session.device?.userId,
-          signal: pc.localDescription,
-        });
-      });
+    // Sends (or re-sends) the WebRTC offer to the agent.
+    // Called when session is active, and again on SESSION_APPROVED in case
+    // the agent connected after the initial offer was sent.
+    const sendOffer = () => {
+      pc.createOffer({ offerToReceiveVideo: true })
+        .then(offer => pc.setLocalDescription(offer))
+        .then(() => {
+          socket.emit(WS_EVENTS.RTC_OFFER, {
+            sessionId,
+            toPeerId: session.device?.userId,
+            signal: pc.localDescription,
+          });
+        })
+        .catch(console.error);
+    };
+
+    // Send immediately only if session is already active
+    if (session.status === 'active') sendOffer();
+
+    // Re-send when session gets approved (agent may have missed the first offer)
+    socket.on(WS_EVENTS.SESSION_APPROVED, (data: any) => {
+      if (data.sessionId === sessionId) {
+        setSessionStatus('active');
+        sendOffer();
+      }
+    });
 
     socket.on(WS_EVENTS.RTC_ANSWER, async (data: any) => {
       // Guard: wrong session or null/malformed signal
@@ -158,6 +174,7 @@ export function RemoteViewPage() {
       cancelAnimationFrame(animFrameId);
       socket.off(WS_EVENTS.RTC_ANSWER);
       socket.off(WS_EVENTS.RTC_ICE_CANDIDATE);
+      socket.off(WS_EVENTS.SESSION_APPROVED);
       socket.off(WS_EVENTS.CHAT_MESSAGE);
       socket.off(WS_EVENTS.SESSION_ENDED);
       socket.off(WS_EVENTS.SESSION_CONTROL_TRANSFER);
